@@ -1,0 +1,253 @@
+{
+  "name": "Automated Content Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * 1,3,5"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Schedule Trigger (Mon/Wed/Fri 7am)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        240,
+        300
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5000/run-pipeline",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "niche",
+              "value": "={{ $vars.CONTENT_NICHE }}"
+            },
+            {
+              "name": "ideas",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "run-pipeline",
+      "name": "Run Content Pipeline",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        460,
+        300
+      ],
+      "typeVersion": 4
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "equals",
+              "value2": "success"
+            }
+          ]
+        }
+      },
+      "id": "check-success",
+      "name": "Pipeline Succeeded?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        680,
+        300
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "resource": "message",
+        "operation": "sendMessage",
+        "channel": "#content-pipeline",
+        "text": "=✅ *Content Pipeline Run Complete*\n\n📊 *Results:*\n• Ideas generated: {{ $json.ideas_count }}\n• Niche: {{ $json.niche }}\n• Airtable records created: {{ $json.records_created }}\n\n👀 Review and approve: {{ $vars.AIRTABLE_BOARD_URL }}"
+      },
+      "id": "slack-success",
+      "name": "Slack: Success Notification",
+      "type": "n8n-nodes-base.slack",
+      "position": [
+        900,
+        200
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "resource": "message",
+        "operation": "sendMessage",
+        "channel": "#content-pipeline",
+        "text": "=❌ *Content Pipeline FAILED*\n\nError: {{ $json.error }}\nTime: {{ $now }}\n\nCheck logs: pipeline.log"
+      },
+      "id": "slack-failure",
+      "name": "Slack: Failure Alert",
+      "type": "n8n-nodes-base.slack",
+      "position": [
+        900,
+        420
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * *"
+            }
+          ]
+        }
+      },
+      "id": "publish-trigger",
+      "name": "Daily Publish Check (10am)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        240,
+        600
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5000/publish",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "run-publisher",
+      "name": "Schedule Approved Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        460,
+        600
+      ],
+      "typeVersion": 4
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 18 * * *"
+            }
+          ]
+        }
+      },
+      "id": "track-trigger",
+      "name": "Daily Engagement Tracker (6pm)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        240,
+        800
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5000/track",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "run-tracker",
+      "name": "Pull Engagement Metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        460,
+        800
+      ],
+      "typeVersion": 4
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (Mon/Wed/Fri 7am)": {
+      "main": [
+        [
+          {
+            "node": "Run Content Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Content Pipeline": {
+      "main": [
+        [
+          {
+            "node": "Pipeline Succeeded?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pipeline Succeeded?": {
+      "main": [
+        [
+          {
+            "node": "Slack: Success Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: Failure Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Publish Check (10am)": {
+      "main": [
+        [
+          {
+            "node": "Schedule Approved Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Engagement Tracker (6pm)": {
+      "main": [
+        [
+          {
+            "node": "Pull Engagement Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    "content-pipeline",
+    "automation"
+  ]
+}
